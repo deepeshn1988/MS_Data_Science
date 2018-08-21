@@ -1,0 +1,4 @@
+CREATE VIEW "Stocks"
+(StockCode VARCHAR PRIMARY KEY,
+ "Closing"."Price" VARCHAR,
+ "Current"."Price" VARCHAR);

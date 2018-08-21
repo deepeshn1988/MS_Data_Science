@@ -1,0 +1,25 @@
+from pyspark.sql.types import *
+from pyspark.sql.functions import *
+
+inputPath = "wasb:///structstream/"
+
+jsonSchema = StructType([
+  StructField("device", StringType(), False),
+  StructField("status", StringType(), False)
+])
+
+fileDF = spark.readStream.schema(jsonSchema).option("maxFilesPerTrigger", 1).json(inputPath)
+
+countDF = fileDF.filter("status == 'error'").groupBy("device").count()
+
+query = countDF.writeStream.format("memory").queryName("counts").outputMode("complete").start()
+
+
+
+
+%%sql
+select * from counts
+
+
+
+query.stop()

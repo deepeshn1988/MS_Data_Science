@@ -1,0 +1,16 @@
+package edx.course
+
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkConf
+
+object WordCountApplication{
+ def main(args: Array[String]){
+  val cnf = new SparkConf().setAppName("WordCount")
+  val sc = new SparkContext(cnf)
+  val txt =   sc.textFile("wasb:///example/data/gutenberg/outlineofscience.txt")
+  val words = txt.flatMap(line => line.split(" "))
+  val counts = words.map(word => (word, 1)).reduceByKey((x, y) => x + y)
+
+  counts.saveAsTextFile("/output_wordcount_application")
+ }
+}

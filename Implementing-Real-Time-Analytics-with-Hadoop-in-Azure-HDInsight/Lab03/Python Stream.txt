@@ -1,0 +1,18 @@
+from pyspark.streaming import StreamingContext
+
+# Create a StreamingContext
+ssc = StreamingContext(sc, 1)
+ssc.checkpoint("wasb:///chkpnt")
+
+# Define a text file stream for the /stream folder
+streamTxt = ssc.textFileStream("wasb:///stream")
+
+# count the words
+words = streamTxt.flatMap(lambda line: line.split(" "))
+pairs = words.map(lambda word: (word, 1))
+wordCounts = pairs.reduceByKeyAndWindow(lambda a, b: a + b, lambda x, y: x - y, 60, 10)
+
+# Print the first 20 elements in the DStream
+wordCounts.pprint(num=20)
+
+ssc.start()

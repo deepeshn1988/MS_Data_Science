@@ -1,0 +1,78 @@
+﻿using System;
+using System.Text;
+using Microsoft.HBase.Client;
+using org.apache.hadoop.hbase.rest.protobuf.generated;
+
+namespace StockWriter
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+
+            while (true)
+            {
+                Random rnd = new Random();
+                Console.Clear();
+
+                string clusterURL = "https://hb12345.azurehdinsight.net";
+                string userName = "HDUser";
+                string password = "HDPa$$w0rd";
+                string tableName = "Stocks";
+
+                // Connect to HBase cluster
+                ClusterCredentials creds = new ClusterCredentials(new Uri(clusterURL),
+                                                                  userName, password);
+                HBaseClient hbaseClient = new HBaseClient(creds);
+
+                // Get all stocks
+                Scanner scanSettings = new Scanner()
+                {
+                    batch = 10,
+                    startRow = Encoding.UTF8.GetBytes("AAA"),
+                    endRow = Encoding.UTF8.GetBytes("ZZZ")
+                };
+
+                // Scan APIs are stateful, specify the endpoint where the request should be sent to. 
+                // e.g. hbaserest0/ means rest server on workernode0
+                RequestOptions scanOptions = RequestOptions.GetDefaultOptions();
+                scanOptions.AlternativeEndpoint = "hbaserest0/";
+                ScannerInformation stockScanner = null;
+                try
+                {
+                    stockScanner = hbaseClient.CreateScannerAsync(tableName, scanSettings, scanOptions).Result;
+                    CellSet stockCells = null;
+
+                    while ((stockCells = hbaseClient.ScannerGetNextAsync(stockScanner, scanOptions).Result) != null)
+                    {
+                        foreach (var row in stockCells.rows)
+                        {
+                            string stock = Encoding.UTF8.GetString(row.key);
+                            Double currentPrice = Double.Parse(Encoding.UTF8.GetString(row.values[1].data));
+                            Double newPrice = currentPrice + (rnd.NextDouble() * (1 - -1) + -1);
+                            Cell c = new Cell
+                            {
+                                column = Encoding.UTF8.GetBytes("Current:Price"),
+                                data =
+                                    Encoding.UTF8.GetBytes(newPrice.ToString())
+                            };
+                            row.values.Insert(2, c);
+                            Console.WriteLine(stock + ": " + currentPrice.ToString() + " := "
+                                                           + newPrice.ToString());
+                        }
+                        hbaseClient.StoreCellsAsync(tableName, stockCells).Wait();
+                    }
+                }
+                finally
+                {
+                    // Make sure free up the resources on rest server after finishing the scan.
+                    if (stockScanner != null)
+                    {
+                        hbaseClient.DeleteScannerAsync(tableName, stockScanner, scanOptions).Wait();
+                    }
+                }
+            }
+
+        }
+    }
+}

@@ -1,0 +1,20 @@
+from pyspark.sql.types import *
+from pyspark.sql.functions import *
+
+devSchema = StructType([
+        StructField("WindowStart", TimestampType(), False),
+        StructField("WindowEnd", TimestampType(), False),
+        StructField("Device", StringType(), False),
+        StructField("AvgReading", FloatType(), False)
+    ])
+devData = spark.read.csv('wasb://<CONTAINER>@<STORAGE_ACCT>.blob.core.windows.net/streamoutput/',
+                         schema=devSchema, header=False)
+devData.createOrReplaceTempView("devicereadings")
+devData.show()
+
+
+
+
+%%sql
+SELECT * FROM devicereadings
+ORDER BY WindowEnd

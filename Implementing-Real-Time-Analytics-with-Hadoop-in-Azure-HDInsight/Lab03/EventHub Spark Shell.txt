@@ -1,0 +1,45 @@
+
+spark-shell --packages "com.microsoft.azure:spark-streaming-eventhubs_2.11:2.1.0"
+
+
+val eventhubParameters = Map[String, String] (
+     "eventhubs.policyname" -> "DeviceAccess",
+     "eventhubs.policykey" -> "<POLICY_KEY>",
+     "eventhubs.namespace" -> "<EVENT_HUB_NAMESPACE>",
+     "eventhubs.name" -> "<EVENT_HUB>",
+     "eventhubs.partition.count" -> "2",
+     "eventhubs.consumergroup" -> "$Default",
+     "eventhubs.progressTrackingDir" -> "/eventhubs/progress",
+     "eventhubs.sql.containsProperties" -> "true"
+     )
+
+
+val inputStream = spark.readStream.
+ format("eventhubs").
+ options(eventhubParameters).
+ load()
+
+
+import org.apache.spark.sql.types._
+import org.apache.spark.sql.functions._
+val jsonSchema = new StructType().add("device", StringType).add("reading", StringType)
+
+
+val events = inputStream.select($"enqueuedTime".cast("Timestamp").alias("enqueuedTime"),from_json($"body".cast("String"), jsonSchema).alias("sensorReading"))
+
+
+val eventdetails = events.select($"enqueuedTime",$"sensorReading.device".alias("device"), $"sensorReading.reading".cast("Float").alias("reading"))
+
+
+val eventAvgs = eventdetails.withWatermark("enqueuedTime", "10 seconds").groupBy(
+   window($"enqueuedTime", "1 minutes"),
+   $"device"
+  ).avg("reading").select($"window.start", $"window.end", $"device", $"avg(reading)")
+
+
+eventAvgs.writeStream.format("csv").option("checkpointLocation", "/checkpoint").option("path", "/streamoutput").outputMode("append").start().awaitTermination()
+
+
+
+
+

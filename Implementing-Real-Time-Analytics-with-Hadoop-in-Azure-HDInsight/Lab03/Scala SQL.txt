@@ -1,0 +1,88 @@
+// load text file
+val csv = spark.read.text("wasb:///HdiSamples/HdiSamples/SensorSampleData/building/building.csv")
+csv.printSchema
+
+// show the data
+csv.show(truncate = false)
+
+
+// infer schema
+val building_csv = spark.read.option("inferSchema",true).option("header",true).csv("wasb:///HdiSamples/HdiSamples/SensorSampleData/building/building.csv")
+building_csv.printSchema
+
+// show the data
+building_csv.show()
+
+
+// Declare a schema
+import org.apache.spark.sql.types._;
+
+val schma = StructType(List(
+  StructField("Date", StringType, false),
+  StructField("Time", StringType, false),
+  StructField("TargetTemp", IntegerType, false),
+  StructField("ActualTemp", IntegerType, false),
+  StructField("System", IntegerType, false),
+  StructField("SystemAge", IntegerType, false),
+  StructField("BuildingID", IntegerType, false)))
+
+val hvac_csv = spark.read.schema(schma).option("header", true).csv("wasb:///HdiSamples/HdiSamples/SensorSampleData/hvac/HVAC.csv")
+hvac_csv.printSchema
+
+
+
+// create schema from a case class
+import org.apache.spark.sql.Encoders
+
+case class HvacReading(Date:String, Time:String, TargetTemp:Int, ActualTemp:Int, System:Int, SystemAge:Int, BuildingID:Int)
+
+val schma = Encoders.product[HvacReading].schema
+
+val hvac_csv = spark.read.schema(schma).option("header", "true").csv("wasb:///HdiSamples/HdiSamples/SensorSampleData/hvac/HVAC.csv")
+
+hvac_csv.printSchema
+
+// show the data
+hvac_csv.show()
+
+
+// Select columns
+val building_data = building_csv.select($"BuildingID", $"BuildingAge", $"HVACproduct")
+building_data.show()
+
+// Select and filter
+var hvac_data = hvac_csv.select($"BuildingID", $"ActualTemp", $"TargetTemp").filter($"ActualTemp" > $"TargetTemp")
+hvac_data.show()
+
+
+// Join DataFrames
+var hot_buildings = building_data.join(hvac_data, "BuildingID")
+hot_buildings.show()
+
+
+// register temp table
+hot_buildings.createOrReplaceTempView("tmpHotBuildings")
+
+// query temp table
+%%sql
+SELECT HVACProduct, AVG(ActualTemp - TargetTemp) AS AvgError
+FROM tmpHotBuildings
+GROUP BY HVACproduct
+ORDER BY HVACproduct
+
+// Save and query a persisted table
+hvac_csv.write.saveAsTable("hvac")
+
+val hvac_df = spark.sql("SELECT * FROM hvac")
+hvac_df.show()
+
+
+// Query a Hive table
+val calls = spark.sql("""SELECT devicemodel, COUNT(*) AS calls
+                         FROM hivesampletable
+                         GROUP BY devicemodel
+                         ORDER BY calls DESC""")
+calls.show()
+
+
+

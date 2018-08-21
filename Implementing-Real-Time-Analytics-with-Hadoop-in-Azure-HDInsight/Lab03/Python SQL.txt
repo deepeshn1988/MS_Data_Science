@@ -1,0 +1,85 @@
+# Load text data
+csv = spark.read.text('wasb:///HdiSamples/HdiSamples/SensorSampleData/building/building.csv')
+csv.printSchema()
+
+
+# show the data
+csv.show(truncate = False)
+
+
+# Infer the schema
+building_csv = spark.read.csv('wasb:///HdiSamples/HdiSamples/SensorSampleData/building/building.csv', header=True, inferSchema=True)
+
+building_csv.printSchema()
+
+
+# show the data
+building_csv.show()
+
+
+# declare a schema
+from pyspark.sql.types import *
+
+schma = StructType([
+  StructField("Date", StringType(), False),
+  StructField("Time", StringType(), False),
+  StructField("TargetTemp", IntegerType(), False),
+  StructField("ActualTemp", StringType(), False),
+  StructField("System", IntegerType(), False),
+  StructField("SystemAge", IntegerType(), False),
+  StructField("BuildingID", IntegerType(), False),
+])
+
+hvac_csv = spark.read.csv('wasb:///HdiSamples/HdiSamples/SensorSampleData/hvac/HVAC.csv', schema=schma, header=True)
+
+hvac_csv.printSchema()
+
+
+# show the data
+hvac_csv.show()
+
+
+# select columns
+building_data = building_csv.select("BuildingID", "BuildingAge", "HVACproduct")
+building_data.show()
+
+
+# select and filter
+from pyspark.sql.functions import *
+
+hvac_data = hvac_csv.select("BuildingID", "ActualTemp", "TargetTemp").filter(col("ActualTemp") > col("TargetTemp"))
+hvac_data.show()
+
+
+# join DataFrames
+hot_buildings = building_data.join(hvac_data, "BuildingID")
+hot_buildings.show()
+
+
+# register temp table
+hot_buildings.createOrReplaceTempView("tmpHotBuildings")
+
+
+
+# query temp table
+%%sql
+SELECT HVACProduct, AVG(ActualTemp - TargetTemp) AS AvgError
+FROM tmpHotBuildings
+GROUP BY HVACproduct
+ORDER BY HVACproduct
+
+
+
+# Save and query a persisted table
+building_csv.write.saveAsTable("building")
+
+building_df = spark.sql("SELECT * FROM building")
+building_df.show()
+
+
+# Query a Hive table
+calls = spark.sql("""SELECT devicemodel, COUNT(*) AS calls
+                     FROM hivesampletable
+                     GROUP BY devicemodel
+                     ORDER BY calls DESC""")
+calls.show()

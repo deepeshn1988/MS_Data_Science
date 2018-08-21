@@ -1,0 +1,21 @@
+import org.apache.spark.streaming._
+
+// Create a StreamingContext from the existing Spark context
+val ssc = new StreamingContext(sc, Seconds(1))
+ssc.checkpoint("wasb:///chkpnt")
+
+// Define a text file stream for the /stream folder
+val streamRdd = ssc.textFileStream("wasb:///stream")
+
+// count the words
+val words = streamRdd.flatMap(line => line.split(" "))
+val pairs = words.map(word => (word, 1))
+val wordCounts = pairs.reduceByKeyAndWindow({(a, b) => a + b},
+                                            {(x, y) => x - y},
+                                            Seconds(60),
+                                            Seconds(10))
+
+// Print the first 20 elements in the DStream
+wordCounts.print()
+
+ssc.start()

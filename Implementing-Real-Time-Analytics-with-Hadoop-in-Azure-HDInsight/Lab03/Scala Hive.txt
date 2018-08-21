@@ -1,0 +1,18 @@
+// Create a dataframe from a Hive query
+val calls = spark.sql("""SELECT devicemodel, COUNT(*) AS calls
+       FROM hivesampletable
+       GROUP BY devicemodel
+       ORDER BY calls DESC """)
+calls.show()
+
+
+
+// Display schema
+calls.printSchema()
+
+
+// Use embedded SQL magic
+%%sql
+SELECT devicemake, COUNT(*) AS calls
+FROM hivesampletable
+GROUP BY devicemake
